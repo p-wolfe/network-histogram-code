@@ -142,7 +142,7 @@ p = polyfit((1:length(uMid))',uMid,1); % linear fit to uMid
 if alpha~=1, error('Currently only supports alpha = 1'); end
 h = full( ( 2^(alpha+1) * alpha * mult^2 * (p(2)+p(1)*length(uMid)/2)^2 * p(1)^2 * pinv(rhoHat) )^(-1/(2*(alpha+1))) );
 
-estMSqrd = full( 2^(alpha+1) * alpha * mult^2 * (p(2)+p(1)*length(uMid)/2)^2 * p(1)^2 * pinv(rhoHat)^2 * (n+1)^2 );
+estMSqrd = full( 2 * mult^2 * (p(2)+p(1)*length(uMid)/2)^2 * p(1)^2 * pinv(rhoHat)^2 * (n+1)^2 );
 MISEfhatBnd = estMSqrd * ( (2/sqrt(estMSqrd)) * (sampleSize*rhoHat)^(-1/2) + 1/n );
 display(['\hat M^2: ' num2str(estMSqrd) '; \hat MISE bound: ' num2str(MISEfhatBnd)]);
 
