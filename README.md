@@ -12,10 +12,13 @@ Demo:
 3. Type or paste in the following sequence of commands:
 
 clear all
+
 load polblogs
+
 A = full(polblogsAdjMat);
+
 help nethist
+
 idx = nethist(A,72);
 
 4. The variable idx now contains the bin indices of each network node.
-
