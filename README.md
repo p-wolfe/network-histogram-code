@@ -21,4 +21,4 @@ help nethist
 
 idx = nethist(A,72);
 
-4. The variable idx now contains the bin indices of each network node.
+The variable idx now contains the bin indices of each network node.
