@@ -58,7 +58,7 @@ end
 h = max(2,min(n,round(h)));
 display(['Final bandwidth ' num2str(h)]);
 lastGroupSize = mod(n,h);
-while (lastGroupSize==1) && (h>2) % step down hbarHist, to avoid singleton final group
+while (lastGroupSize==1) && (h>2) % step down h, to avoid singleton final group
     h = h - 1;
     lastGroupSize = mod(n,h);
     display('NB: Bandwidth reduced to avoid singleton group');
@@ -71,11 +71,11 @@ regParam = rhoHat/4;
 
 distVec = pdist(A+regParam,'hamming'); % vector of pairwise distances between regularized rows of A
 L = 1 - squareform(distVec); % exponential Taylor approximation to L_ij = exp(-||A_i. - A_j.||^2 / 2) for small ||.||
-clear distVec;
+clear distVec; % save memory
 d = sum(L,2);
 OPTS.vo = ones(n,1);
 [u,~] = eigs( (d.^(-1/2)*(d.^(-1/2))').*L-sqrt(d)*sqrt(d)'/sqrt(d'*d),1,'LA',OPTS); % 2nd eigenvector of normalized Laplacian
-clear L
+clear L; % save memory
 u = u.*sign(u(1)); %  set 1st coord >= 0 wlog, to fix an arbitrary sign permutation
 [~,ind]=sort(u,'ascend'); % sort on this embedding
 k = ceil(n/h);
@@ -110,7 +110,26 @@ function [h, estMSqrd] = oracbwplugin(A,c,type,alpha)
 %   A = full(polblogsAdjMat);
 %   h = oracbwplugin(A,3,'eigs',1); % returns h = 73.5910
 %   h = oracbwplugin(A,3,'degs',1); % returns h = 74.1031
-%   Copyright 2013 Sofia C. Olhede and Patrick J. Wolfe (arXiv:1312.5306)
+%   
+%   Copyright (C) 2013 Sofia C. Olhede and Patrick J. Wolfe (arXiv:1312.5306)
+%   NETHIST comes with ABSOLUTELY NO WARRANTY; for details type `TYPE NETHIST'.
+%   This is free software, and you are welcome to redistribute it
+%   under certain conditions; type `TYPE NETHIST' for details.
+
+%     This program is free software; you can redistribute it and/or modify
+%     it under the terms of the GNU General Public License as published by
+%     the Free Software Foundation; either version 2 of the License, or (at
+%     your option) any later version.
+% 
+%     This program is distributed in the hope that it will be useful, but
+%     WITHOUT ANY WARRANTY; without even the implied warranty of
+%     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+%     General Public License for more details.
+% 
+%     You should have received a copy of the GNU General Public License
+%     along with this program; if not, write to the Free Software
+%     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+%     02110-1301 USA.
 
 showPlots = 1; % Boolean for plotting
 
@@ -159,19 +178,38 @@ end
 
 function bestLabelVec = graphest_fastgreedy(A,hbar,inputLabelVec,rStream)
 %GRAPHEST_FASTGREEDY implements likelihood-based optimization for nethist.m
-%   Copyright 2013 Sofia C. Olhede and Patrick J. Wolfe (arXiv:1312.5306)
+%   
+%   Copyright (C) 2013 Sofia C. Olhede and Patrick J. Wolfe (arXiv:1312.5306)
+%   NETHIST comes with ABSOLUTELY NO WARRANTY; for details type `TYPE NETHIST'.
+%   This is free software, and you are welcome to redistribute it
+%   under certain conditions; type `TYPE NETHIST' for details.
+
+%     This program is free software; you can redistribute it and/or modify
+%     it under the terms of the GNU General Public License as published by
+%     the Free Software Foundation; either version 2 of the License, or (at
+%     your option) any later version.
+% 
+%     This program is distributed in the hope that it will be useful, but
+%     WITHOUT ANY WARRANTY; without even the implied warranty of
+%     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+%     General Public License for more details.
+% 
+%     You should have received a copy of the GNU General Public License
+%     along with this program; if not, write to the Free Software
+%     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+%     02110-1301 USA.
 
 absTol = 2.5*10^-4; % absolute tolerance - change in normalized (order-one) likelihood for 3 consec iterations
-maxNumRestarts = 500; %;
-if size(A,2)<=256, % ~n-choose-2 for n = 256
+maxNumRestarts = 500; % terminates algo if tolerance not reached first
+if size(A,2)<=256, % arbitrary size cutoff
     allInds = 1; % Consider basing this choice on size (or sparse-vs-dense storage) of A
 else
-    allInds = 0;
+    allInds = 0; % Only a random subset of pairs will be visited on each iteration
 end
 if allInds
-    numMHsteps = nchoosek(size(A,2),2); %round( nchoosek(size(A,2),2) / 40 );
+    numGreedySteps = nchoosek(size(A,2),2); %round( nchoosek(size(A,2),2) / 40 );
 else
-    numMHsteps = 2*10^4; %round(size(A,2).^1.67); %4*10^5; % 10^7 is a typical laptop memory limit
+    numGreedySteps = 2*10^4; %round(size(A,2).^1.67); %4*10^5; % 10^7 is a typical laptop memory limit
 end
 
 % Compute necessary quantities
@@ -215,7 +253,6 @@ for a = 1:(k-smallerLastGroup) % update cluster indices
 end
 if smallerLastGroup
     initialClusterInds(k,1:length(find(initialLabelVec==k))) = find(initialLabelVec==k)';
-    initialClusterCentroids(k,:) = sum(A(:,initialClusterInds(k,1:length(find(initialLabelVec==k)))),2)';
 end
 initialACounts = getSampleCounts(A,initialClusterInds);
 initialLL = fastNormalizedBMLogLik(initialACounts(aLeqb)./habSqrd(aLeqb),habSqrd(aLeqb),sampleSize);
@@ -223,7 +260,6 @@ initialLL = fastNormalizedBMLogLik(initialACounts(aLeqb)./habSqrd(aLeqb),habSqrd
 bestLL = initialLL;
 oldNormalizedBestLL = bestLL*2*sampleSize/sum(A(:));
 bestLabelVec = initialLabelVec;
-bestClusterCentroids = initialClusterCentroids;
 bestCount = 0;
 consecZeroImprovements = 0;
 tolCounter = 0;
@@ -232,19 +268,17 @@ tic;
 tStartOuter = tic;
 for mm = 1:maxNumRestarts
     
-    oneTwoVec = 1 + (rand(rStream,numMHsteps,1)>2/3); % 1 wp x; 2 wp 1-x
-    iVec = max(1,ceil(rand(rStream,numMHsteps,1)*n));
-    jVec = max(1,ceil(rand(rStream,numMHsteps,1)*n));
-    kVec = max(1,ceil(rand(rStream,numMHsteps,1)*n)); % random pairs of elements between 1 and n
+    oneTwoVec = 1 + (rand(rStream,numGreedySteps,1)>2/3); % 1 wp x; 2 wp 1-x
+    iVec = max(1,ceil(rand(rStream,numGreedySteps,1)*n));
+    jVec = max(1,ceil(rand(rStream,numGreedySteps,1)*n));
+    kVec = max(1,ceil(rand(rStream,numGreedySteps,1)*n)); % random pairs of elements between 1 and n
         
     bestClusterInds = zeros(k,hbar);
     for a = 1:(k-smallerLastGroup) % update cluster indices
         bestClusterInds(a,:) = find(bestLabelVec==a)';
-        bestClusterCentroids(a,:) = sum(A(:,bestClusterInds(a,:)),2)';
     end
     if smallerLastGroup
         bestClusterInds(k,1:length(find(bestLabelVec==k))) = find(bestLabelVec==k)';
-        bestClusterCentroids(k,:) = sum(A(:,bestClusterInds(k,1:length(find(bestLabelVec==k)))),2)';
     end
     bestACounts = getSampleCounts(A,bestClusterInds);
     bestLL = fastNormalizedBMLogLik(bestACounts(aLeqb)./habSqrd(aLeqb),habSqrd(aLeqb),sampleSize);
@@ -254,7 +288,7 @@ for mm = 1:maxNumRestarts
     currentLL = bestLL;
     currentLabelVec = bestLabelVec;
         
-    for m = 1:numMHsteps
+    for m = 1:numGreedySteps
         
         % Prepare to update quantities for trial clustering
         trialClusterInds = currentClusterInds;
@@ -263,8 +297,8 @@ for mm = 1:maxNumRestarts
         trialLL = currentLL;
         
         % Implement consecutive pairwise swaps to obtain trial clustering
-        for mmm = 1:oneTwoVec(m)
-            if mmm==1 % Step 1 of 2:
+        for swapNum = 1:oneTwoVec(m)
+            if swapNum==1 % Step 1 of 2:
                 i = iVec(m); % ideally here i,j are very similar, but in different groups
                 j = jVec(m);
                 a = trialLabelVec(i); % get group labels of nodes in chosen pair
@@ -357,7 +391,7 @@ for mm = 1:maxNumRestarts
                 
             end % if a~=b
             
-        end % for mmm = 1:geomVec(m)
+        end % for swapNum = 1:oneTwoVec(m)
         
         % Metroplis or greedy step; if trial clustering accepted, then update current <-- trial
         if trialLL > currentLL
@@ -368,7 +402,7 @@ for mm = 1:maxNumRestarts
             
         end
         
-    end
+    end % for m = 1:numGreedySteps
         
     % Keep track of best clustering overall
     if currentLL > bestLL % replace and save if trialLL is an improvement
@@ -406,18 +440,38 @@ for mm = 1:maxNumRestarts
                 break
             end
         else
-            if consecZeroImprovements == ceil(k*nchoosek(n,2)/numMHsteps)
+            if consecZeroImprovements == ceil(k*nchoosek(n,2)/numGreedySteps)
                 display('Local optimum likely reached in random-ordered greedy likelihood search; quitting now');
                 break
             end
         end
     end
     
-end
+end % 
 
 % END MAIN FUNCTION GRAPHEST_FASTGREEDY.M
 
 function Xsums = getSampleCounts(X,clusterInds)
+%   
+%   Copyright (C) 2013 Sofia C. Olhede and Patrick J. Wolfe (arXiv:1312.5306)
+%   NETHIST comes with ABSOLUTELY NO WARRANTY; for details type `TYPE NETHIST'.
+%   This is free software, and you are welcome to redistribute it
+%   under certain conditions; type `TYPE NETHIST' for details.
+
+%     This program is free software; you can redistribute it and/or modify
+%     it under the terms of the GNU General Public License as published by
+%     the Free Software Foundation; either version 2 of the License, or (at
+%     your option) any later version.
+% 
+%     This program is distributed in the hope that it will be useful, but
+%     WITHOUT ANY WARRANTY; without even the implied warranty of
+%     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+%     General Public License for more details.
+% 
+%     You should have received a copy of the GNU General Public License
+%     along with this program; if not, write to the Free Software
+%     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+%     02110-1301 USA.
 
 numClusters = size(clusterInds,1);
 Xsums = zeros(numClusters,numClusters); % initialize
@@ -435,6 +489,26 @@ for a = 1:numClusters % relies on A begin symmetric and with no self-loops
 end
 
 function normLogLik = fastNormalizedBMLogLik(thetaVec,habSqrdVec,sampleSize)
+%   
+%   Copyright (C) 2013 Sofia C. Olhede and Patrick J. Wolfe (arXiv:1312.5306)
+%   NETHIST comes with ABSOLUTELY NO WARRANTY; for details type `TYPE NETHIST'.
+%   This is free software, and you are welcome to redistribute it
+%   under certain conditions; type `TYPE NETHIST' for details.
+
+%     This program is free software; you can redistribute it and/or modify
+%     it under the terms of the GNU General Public License as published by
+%     the Free Software Foundation; either version 2 of the License, or (at
+%     your option) any later version.
+% 
+%     This program is distributed in the hope that it will be useful, but
+%     WITHOUT ANY WARRANTY; without even the implied warranty of
+%     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+%     General Public License for more details.
+% 
+%     You should have received a copy of the GNU General Public License
+%     along with this program; if not, write to the Free Software
+%     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+%     02110-1301 USA.
 
 thetaVec(thetaVec<=0) = eps;     % else 0*log(0) evaluates to NaN
 thetaVec(thetaVec>=1) = 1 - eps; % else (1-1)*log(1-1) evaluates to NaN

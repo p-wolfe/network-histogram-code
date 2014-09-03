@@ -3,9 +3,9 @@ network-histogram-code
 
 Code to implement the network histogram (Olhede and Wolfe, arXiv:1312.5306)
 
-Demo: 
+Demo:
 
-1. Save nethist.m and polblogs.mat to the same directory.  
+1. Save nethist.m and polblogs.mat to the same directory.
 
 2. Open Matlab and change to this directory.
 
@@ -22,3 +22,9 @@ help nethist
 idx = nethist(A,72);
 
 The variable idx now contains the bin indices of each network node.
+
+4. A quick visualization of the result may be obtained by typing
+
+[~,ind] = sort(idx);
+
+spy(A(ind,ind));
