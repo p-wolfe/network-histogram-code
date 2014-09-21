@@ -1,12 +1,15 @@
-function idx = nethist(A,h)
+function idx = nethist(A,h,outfile)
 %NETHIST Network histogram.
 %   IDX = NETHIST(A, H) computes the network histogram of an N-by-N
-%   adjacency matrix A, which may be sparse or dense but must be 0-1
-%   valued, symmetric, and with zero main diagonal.  Optional bandwidth
-%   parameter H specifies the number of nodes in each histogram bin, which
-%   is automatically determined if H is not specified.  NETHIST returns an
-%   N-by-1 vector IDX containing the bin indices of each network node.
-%   
+%   adjacency matrix, which must be 0-1 valued, symmetric, and with zero
+%   main diagonal.  Input A may either be the full filename of an
+%   ASCII-text edgelist to be read in, or the adjacency matrix itself.
+%   Optional bandwidth parameter H specifies the number of nodes in each
+%   histogram bin, which is automatically determined if H is not specified.
+%   NETHIST returns an N-by-1 vector IDX containing the bin indices of each
+%   network node.  Optional 3rd argument OUTFILE specifies an output
+%   filename to which IDX is written as an ASCII text file.
+%
 %   Copyright (C) 2013 Sofia C. Olhede and Patrick J. Wolfe (arXiv:1312.5306)
 %   NETHIST comes with ABSOLUTELY NO WARRANTY; for details type `TYPE NETHIST'.
 %   This is free software, and you are welcome to redistribute it
@@ -26,6 +29,12 @@ function idx = nethist(A,h)
 %     along with this program; if not, write to the Free Software
 %     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
 %     02110-1301 USA.
+
+% Determine whether A is a filename, or a matrix
+if ischar(A)
+    A = loadedgelist(A);
+    A = full(A);
+end
 
 % Error-check inputs
 assert(ismatrix(A),'Input A must be a matrix');
@@ -48,7 +57,12 @@ display(['Generated seed based on system clock: ' int2str(rngSeed)]);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Pick an analysis bandwidth and initialize via regularized spectral clustering
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-if ~exist('h','var'), % use data-driven h if optional input not specified
+if ~exist('h','var'),
+    h = [];
+elseif isdeployed()
+    h = str2double(h); % necessary to handle string input argument
+end
+if isempty(h), % use data-driven h if optional input not specified
     c = min(4,sqrt(n)/8);
     [h,~] = oracbwplugin(A,c,'degs',1); % fractional h, prior to rounding
     display(['Determining bandwidth from data; initial estimate ' num2str(h)]);
@@ -69,7 +83,7 @@ display(['Adjacency matrix has ' int2str(n) ' rows/cols'])
 tstart = tic;
 regParam = rhoHat/4;
 
-distVec = pdist(A+regParam,'hamming'); % vector of pairwise distances between regularized rows of A
+distVec = pdist(full(A+regParam),'hamming'); % vector of pairwise distances between regularized rows of A
 L = 1 - squareform(distVec); % exponential Taylor approximation to L_ij = exp(-||A_i. - A_j.||^2 / 2) for small ||.||
 clear distVec; % save memory
 d = sum(L,2);
@@ -91,6 +105,17 @@ display(['Initial label vector assigned from row-similarity ordering; time ' num
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 idx = graphest_fastgreedy(A,h,idxInit,rStream);
+
+% Optionally, save histogram index into specified output ASCII text file
+if exist('outfile','var'),
+    assert(ischar(outfile),'Optional input OUTFILE must a be string');
+    dlmwrite(outfile,idx,'delimiter',' ','precision','%.0f');
+end
+
+% Exit if running standalone
+if isdeployed(),
+   exit();
+end
 
 % END MAIN FUNCTION NETHIST.M
 
@@ -131,7 +156,11 @@ function [h, estMSqrd] = oracbwplugin(A,c,type,alpha)
 %     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
 %     02110-1301 USA.
 
-showPlots = 1; % Boolean for plotting
+if isdeployed(),
+    showPlots = 0; % Boolean for plotting
+else
+    showPlots = 1;
+end 
 
 % Default inputs
 if ~exist('type','var'), type = 'degs'; end
@@ -398,8 +427,7 @@ for mm = 1:maxNumRestarts
             currentLabelVec = trialLabelVec;
             currentLL = trialLL;
             currentACounts = trialACounts;
-            currentClusterInds = trialClusterInds;
-            
+            currentClusterInds = trialClusterInds;        
         end
         
     end % for m = 1:numGreedySteps
@@ -408,11 +436,10 @@ for mm = 1:maxNumRestarts
     if currentLL > bestLL % replace and save if trialLL is an improvement
         bestLL = currentLL; % update globally best visited likelihood
         bestLabelVec = currentLabelVec;
-        bestCount = bestCount + 1;
-        
-    end % if currentLL > bestLL
-    %%%%%%%%%%%%%%%%%%%%%%%%%%
+        bestCount = bestCount + 1;        
+    end
     
+    % Display progress, check termination criteria
     if ~mod(mm,5)
         tElapsedOuter = toc(tStartOuter);
         normalizedBestLL = bestLL*2*sampleSize/sum(A(:));
@@ -514,3 +541,47 @@ thetaVec(thetaVec<=0) = eps;     % else 0*log(0) evaluates to NaN
 thetaVec(thetaVec>=1) = 1 - eps; % else (1-1)*log(1-1) evaluates to NaN
 negEntVec = thetaVec.*log(thetaVec) + (1-thetaVec).*log(1-thetaVec);
 normLogLik = sum(habSqrdVec.*negEntVec) / sampleSize;
+
+function A = loadedgelist(fname)
+%   
+%   Copyright (C) 2013 Sofia C. Olhede and Patrick J. Wolfe (arXiv:1312.5306)
+%   NETHIST comes with ABSOLUTELY NO WARRANTY; for details type `TYPE NETHIST'.
+%   This is free software, and you are welcome to redistribute it
+%   under certain conditions; type `TYPE NETHIST' for details.
+
+%     This program is free software; you can redistribute it and/or modify
+%     it under the terms of the GNU General Public License as published by
+%     the Free Software Foundation; either version 2 of the License, or (at
+%     your option) any later version.
+% 
+%     This program is distributed in the hope that it will be useful, but
+%     WITHOUT ANY WARRANTY; without even the implied warranty of
+%     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+%     General Public License for more details.
+% 
+%     You should have received a copy of the GNU General Public License
+%     along with this program; if not, write to the Free Software
+%     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+%     02110-1301 USA.
+
+% Read in a numerical edge list as an undirected network
+edgeList = load(fname,'-ascii'); %nodeLabels = unique(edgeList);
+
+% Error checking
+assert(size(edgeList,1)>=1,'Ascii edgelist file must contain at least 1 edge');
+assert(size(edgeList,2)>=2,'Ascii edgelist file must contain 2 columns');
+
+% Create and fill initial matrix; make square
+A = sparse(edgeList(:,1),edgeList(:,2),1); % creates sparse, binary matrix
+[m,n] = size(A);
+A(max(m,n),max(m,n)) = 0; % resize to obtain a square matrix
+
+% Symmetrize, remove diagonal: all edges converted to undirected edges
+A = A + A';
+A = spdiags(zeros(max(m,n),1),0,A);
+A(A~=0) = 1; % ensure binary
+
+% Remove zero-degree nodes
+d = full(sum(A,2));
+ind = find(d>0);
+A = A(ind,ind);
