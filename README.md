@@ -30,7 +30,7 @@ spy(A(ind,ind));
 Standalone Windows demo:
 
 1. Save nethist.exe, nethist.bat, and polblogs.txt to the same directory.
-2. Make sure you have MATLAB Compiler Runtime (MCR) version 7.16, 
+2. Make sure you have MATLAB Compiler Runtime (MCR) version 8.3 (R2014a),
 freely available from http://www.mathworks.com/products/compiler/mcr/
 3. Double-click on nethist.bat, OR open up a command window and type:
 
